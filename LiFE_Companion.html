@@ -1,0 +1,78 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LiFE Companion – Mission LiFE Citizen App</title>
+<style>
+:root{--bg:#f4f8f4;--c:#fff;--t:#14301f;--m:#5b7364;--g:#1f8a4c;--g2:#d8f0e0;--b:#dbe6dd}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1a13;--c:#172620;--t:#e6f3ea;--m:#9db5a5;--g:#3ccf7a;--g2:#1f3a2b;--b:#27402f}}
+*{box-sizing:border-box}body{margin:0;font:15px system-ui,sans-serif;background:var(--bg);color:var(--t);padding:env(safe-area-inset-top) 0 70px}
+header{padding:16px;background:var(--g);color:#fff}header h1{margin:0;font-size:19px}header small{opacity:.9}
+main{max-width:640px;margin:auto;padding:12px}.card{background:var(--c);border:1px solid var(--b);border-radius:14px;padding:14px;margin:10px 0}
+h2{font-size:16px;margin:0 0 8px}label{display:block;font-size:13px;color:var(--m);margin-top:8px}
+input,select{width:100%;padding:9px;border:1px solid var(--b);border-radius:8px;background:var(--bg);color:var(--t);font-size:15px}
+button{background:var(--g);color:#fff;border:0;border-radius:9px;padding:10px 14px;font-size:14px;cursor:pointer;margin-top:10px}
+button.s{background:var(--g2);color:var(--t)}.big{font-size:32px;font-weight:700;color:var(--g)}.m{color:var(--m);font-size:13px}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--c);border-top:1px solid var(--b);padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;background:none;color:var(--m);border-radius:0;margin:0;padding:12px 2px;font-size:12px}nav button.a{color:var(--g);font-weight:700}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--b)}.row:last-child{border:0}
+.bar{height:10px;background:var(--g2);border-radius:6px;overflow:hidden}.bar i{display:block;height:100%;background:var(--g)}
+canvas{width:100%;height:150px}.hide{display:none}.tag{background:var(--g2);padding:2px 8px;border-radius:10px;font-size:12px}
+</style></head><body>
+<header><h1>🌿 LiFE Companion</h1><small>Mission LiFE · Lifestyle for Environment · Gujarat</small></header>
+<main>
+<section id="t0"><div class="card"><h2>Your footprint baseline</h2>
+<label>Electricity (kWh / month)</label><input id="kwh" type="number" value="220">
+<label>LPG cylinders (14.2 kg) / month</label><input id="lpg" type="number" step="0.1" value="1">
+<label>Petrol (litres / month)</label><input id="pet" type="number" value="30">
+<label>Meals with meat per week</label><input id="meat" type="number" value="4">
+<button onclick="calc()">Calculate & save</button></div>
+<div class="card"><div class="m">Monthly footprint</div><div class="big" id="fp">–</div><div class="m" id="fpd"></div>
+<canvas id="ch" width="600" height="150"></canvas><div class="m">Trend (kg CO₂e, last saves)</div></div></section>
+
+<section id="t1" class="hide"><div class="card"><h2>⚡ Smart nudge</h2><div id="nudge"></div>
+<label>Simulated hour of day (0–23)</label><input id="hr" type="number" min="0" max="23" value="19" oninput="nudge()"></div>
+<div class="card"><h2>Daily micro-tasks</h2><div id="tasks"></div></div></section>
+
+<section id="t2" class="hide"><div class="card"><h2>🏆 Your impact</h2><div class="big" id="pts">0</div><div class="m">points · <span id="saved">0</span> kg CO₂ avoided</div>
+<div class="bar" style="margin-top:8px"><i id="gb" style="width:0"></i></div><div class="m">Community goal: 5,000 kg CO₂ avoided (Gujarat pilot)</div></div>
+<div class="card"><h2>Leaderboard</h2><div id="lb"></div></div></section>
+
+<section id="t3" class="hide"><div class="card"><h2>☀️ Rooftop solar feasibility</h2>
+<label>Usable roof area (m²)</label><input id="roof" type="number" value="30">
+<label>Monthly bill (₹)</label><input id="bill" type="number" value="1500">
+<label>Tariff (₹/kWh)</label><input id="tar" type="number" step="0.1" value="6.5">
+<button onclick="solar()">Estimate</button><div id="sol" class="m"></div></div>
+<div class="card"><h2>Vendor directory</h2><div class="m">Use only GEDA-empanelled vendors. List: geda.gujarat.gov.in (verify before contacting).</div></div></section>
+</main>
+<nav><button class="a" onclick="go(0)">Footprint</button><button onclick="go(1)">Nudges</button><button onclick="go(2)">Community</button><button onclick="go(3)">Solar</button></nav>
+<script>
+// Assumptions (editable): grid EF 0.82 kgCO2/kWh, LPG 2.98 kg/kg, petrol 2.31 kg/L, meat ~2.5 kg/meal
+const EF={kwh:.82,lpg:14.2*2.98,pet:2.31,meat:2.5*4.33},INDIA_AVG=170;
+const TASKS=[["Switch off standby devices",.8],["Run washing machine off-peak",1.2],["Set AC to 24–26°C",2.0],["Use LED/BEE 5-star appliance",1.0],["Walk/cycle/transit instead of petrol trip",2.3]];
+const S=(()=>{try{return JSON.parse(localStorage.getItem("life"))||{}}catch(e){return{}}})();
+S.hist=S.hist||[];S.done=S.done||{};S.pts=S.pts||0;S.saved=S.saved||0;
+const save=()=>{try{localStorage.setItem("life",JSON.stringify(S))}catch(e){}};
+const $=id=>document.getElementById(id);
+function go(i){for(let k=0;k<4;k++){$("t"+k).classList.toggle("hide",k!=i);document.querySelectorAll("nav button")[k].classList.toggle("a",k==i)}if(i==2)board()}
+function calc(){const v={kwh:+$("kwh").value*EF.kwh,lpg:+$("lpg").value*EF.lpg,pet:+$("pet").value*EF.pet,meat:+$("meat").value*EF.meat};
+const t=Object.values(v).reduce((a,b)=>a+b,0);S.hist.push(Math.round(t));S.hist=S.hist.slice(-12);S.top=Object.entries(v).sort((a,b)=>b[1]-a[1])[0][0];save();show()}
+function show(){const t=S.hist.at(-1);if(!t)return;$("fp").textContent=t+" kg CO₂e";
+const n={kwh:"electricity",lpg:"cooking fuel",pet:"petrol",meat:"diet"}[S.top];
+$("fpd").textContent=(t>INDIA_AVG*1.5?"Above":"Near/below")+" a rough household benchmark. Biggest source: "+n+".";draw()}
+function draw(){const c=$("ch"),x=c.getContext("2d");x.clearRect(0,0,600,150);const h=S.hist;if(h.length<1)return;
+const mx=Math.max(...h)*1.1,w=600/Math.max(h.length,2);x.strokeStyle="#1f8a4c";x.lineWidth=3;x.beginPath();
+h.forEach((v,i)=>{const X=w*i+w/2,Y=140-v/mx*130;i?x.lineTo(X,Y):x.moveTo(X,Y)});x.stroke();
+h.forEach((v,i)=>{x.fillStyle="#1f8a4c";x.beginPath();x.arc(w*i+w/2,140-v/mx*130,4,0,7);x.fill()})}
+function nudge(){const h=+$("hr").value;let m;
+if(h>=18&&h<22)m="Peak grid hours (6–10 pm). Delay washing machine, geyser and iron until after 10 pm.";
+else if(h>=10&&h<16)m="Solar-rich midday. Good time for pumps and heavy loads; if you have rooftop solar, use it now.";
+else m="Off-peak. Schedule dishwasher/EV charging now. Switch off idle devices.";$("nudge").textContent=m}
+function tasks(){$("tasks").innerHTML=TASKS.map((t,i)=>`<div class="row"><span>${t[0]}<br><span class="m">${t[1]} kg CO₂ saved</span></span><button class="${S.done[i]===today()?"s":""}" onclick="done(${i})">${S.done[i]===today()?"Done ✓":"Mark done"}</button></div>`).join("")}
+const today=()=>new Date().toISOString().slice(0,10);
+function done(i){if(S.done[i]===today())return;S.done[i]=today();S.pts+=10;S.saved=+(S.saved+TASKS[i][1]).toFixed(1);save();tasks();board()}
+function board(){$("pts").textContent=S.pts;$("saved").textContent=S.saved;$("gb").style.width=Math.min(100,(S.saved+1240)/50)+"%";
+const L=[["Ahmedabad Green Club",620],["Surat Solar Society",540],["Vadodara Youth",410],["You",S.pts]].sort((a,b)=>b[1]-a[1]);
+$("lb").innerHTML=L.map((r,i)=>`<div class="row"><span>${i+1}. ${r[0]}${r[0]=="You"?' <span class="tag">you</span>':""}</span><b>${r[1]}</b></div>`).join("")}
+function solar(){const a=+$("roof").value,kw=Math.floor(a/10*10)/10,yld=1500,gen=kw*yld,tar=+$("tar").value,use=+$("bill").value/tar*12;
+const sz=Math.min(kw,Math.max(1,use/yld)),cost=sz*55000,sub=Math.min(sz,2)*30000+(sz>2?Math.min(sz-2,1)*18000:0),net=cost-sub,sv=Math.min(sz*yld,use)*tar;
+$("sol").innerHTML=`Roof fits ≈ ${kw.toFixed(1)} kW. Recommended: <b>${sz.toFixed(1)} kW</b><br>Output ≈ ${Math.round(sz*yld)} kWh/yr · Saves ≈ ₹${Math.round(sv)}/yr<br>Est. cost ₹${Math.round(cost)} − subsidy ₹${Math.round(sub)} = ₹${Math.round(net)}<br>Payback ≈ ${(net/sv).toFixed(1)} yrs · CO₂ avoided ≈ ${Math.round(sz*yld*EF.kwh)} kg/yr<br><i>Assumptions: 1500 kWh/kW/yr, ₹55k/kW, PM Surya Ghar-style subsidy; verify current rates.</i>`}
+nudge();tasks();show();board();
+</script></body></html>
